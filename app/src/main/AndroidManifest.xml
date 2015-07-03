@@ -27,7 +27,8 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-
+        <activity android:name=".CameraActivity"/>
+        <activity android:name=".MarkerActivity"/>
         <meta-data
             android:name="com.amap.api.v2.apikey"
             android:value="42ce04a19d698e6334810dd2a4c23e4e"/>
