@@ -1,6 +1,5 @@
 package cn.xm.weidongjian.amapdemo;
 
-import android.content.Intent;
 import android.graphics.Color;
 import android.location.Location;
 import android.os.Bundle;
@@ -22,6 +21,7 @@ import com.amap.api.maps.model.BitmapDescriptor;
 import com.amap.api.maps.model.BitmapDescriptorFactory;
 import com.amap.api.maps.model.CameraPosition;
 import com.amap.api.maps.model.LatLng;
+import com.amap.api.maps.model.Marker;
 import com.amap.api.maps.model.MarkerOptions;
 import com.amap.api.maps.model.MyLocationStyle;
 
@@ -32,6 +32,8 @@ public class MainActivity extends AppCompatActivity implements AMapLocationListe
     private LocationManagerProxy mLocationManagerProxy;
     private Handler handler = new Handler();
     private OnLocationChangedListener listener;
+    private LatLng myLocation;
+    private Marker marker;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -103,17 +105,23 @@ public class MainActivity extends AppCompatActivity implements AMapLocationListe
             if (listener != null) {
                 listener.onLocationChanged(aMapLocation);// 显示系统小蓝点
             }
-            BitmapDescriptor chooseDescriptor = BitmapDescriptorFactory.fromResource(R.drawable.icon_loaction_choose);
-            MarkerOptions options = new MarkerOptions().position(new LatLng(aMapLocation.getLatitude(), aMapLocation.getLongitude())).icon(chooseDescriptor);
-            aMap.addMarker(options);
-            handler.postDelayed(new Runnable() {
-                @Override
-                public void run() {
-                    CameraUpdate update = CameraUpdateFactory.zoomTo(17f);
-                    aMap.animateCamera(update, 1000, null);
-                }
-            }, 1000);
+            myLocation = new LatLng(aMapLocation.getLatitude(), aMapLocation.getLongitude());
+            addChooseMarker();
         }
+    }
+
+    private void addChooseMarker() {
+        BitmapDescriptor chooseDescriptor = BitmapDescriptorFactory.fromResource(R.drawable.icon_loaction_choose);
+        MarkerOptions centerMarkerOption = new MarkerOptions().position(myLocation).icon(chooseDescriptor);
+        marker = aMap.addMarker(centerMarkerOption);
+        marker.setPositionByPixels(mapView.getWidth()/2, mapView.getHeight()/2);
+        handler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                CameraUpdate update = CameraUpdateFactory.zoomTo(17f);
+                aMap.animateCamera(update, 1000, null);
+            }
+        }, 1000);
     }
 
     @Override
@@ -165,7 +173,7 @@ public class MainActivity extends AppCompatActivity implements AMapLocationListe
     public void onClick(View v) {
         switch (v.getId()) {
             case R.id.button:
-                startActivity(new Intent(MainActivity.this, MarkerActivity.class));
+                marker.setIcon(BitmapDescriptorFactory.fromResource(R.drawable.icon_loaction_choose_moving));
                 break;
             default:
                 break;
