@@ -1,5 +1,8 @@
 package cn.xm.weidongjian.amapdemo;
 
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
+import android.animation.ValueAnimator;
 import android.graphics.Color;
 import android.location.Location;
 import android.os.Bundle;
@@ -7,6 +10,7 @@ import android.os.Handler;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.View;
+import android.view.animation.DecelerateInterpolator;
 
 import com.amap.api.location.AMapLocation;
 import com.amap.api.location.AMapLocationListener;
@@ -24,16 +28,28 @@ import com.amap.api.maps.model.LatLng;
 import com.amap.api.maps.model.Marker;
 import com.amap.api.maps.model.MarkerOptions;
 import com.amap.api.maps.model.MyLocationStyle;
+import com.amap.api.services.core.LatLonPoint;
+import com.amap.api.services.geocoder.GeocodeResult;
+import com.amap.api.services.geocoder.GeocodeSearch;
+import com.amap.api.services.geocoder.GeocodeSearch.OnGeocodeSearchListener;
+import com.amap.api.services.geocoder.RegeocodeQuery;
+import com.amap.api.services.geocoder.RegeocodeResult;
+
+import cn.xm.weidongjian.amapdemo.utils.ToastUtil;
 
 
-public class MainActivity extends AppCompatActivity implements AMapLocationListener, AMap.OnCameraChangeListener, View.OnClickListener, LocationSource {
+public class MainActivity extends AppCompatActivity implements AMapLocationListener, AMap.OnCameraChangeListener, View.OnClickListener, LocationSource, OnGeocodeSearchListener {
     private MapView mapView;
     private AMap aMap;
     private LocationManagerProxy mLocationManagerProxy;
     private Handler handler = new Handler();
     private OnLocationChangedListener listener;
-    private LatLng myLocation;
-    private Marker marker;
+    private LatLng myLocation = null;
+    private Marker centerMarker;
+    private boolean isMovingMarker = false;
+    private BitmapDescriptor movingDescriptor, chooseDescripter, successDescripter;
+    private ValueAnimator animator = null;
+    private GeocodeSearch geocodeSearch;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -57,10 +73,17 @@ public class MainActivity extends AppCompatActivity implements AMapLocationListe
         }
         aMap.setLocationSource(this);// 设置定位监听
         aMap.setMyLocationEnabled(true);
-        aMap.setOnCameraChangeListener(this);
+
         aMap.setMyLocationType(AMap.LOCATION_TYPE_LOCATE);
         CameraUpdate cameraUpdate = CameraUpdateFactory.zoomTo(15);
         aMap.moveCamera(cameraUpdate);
+
+        movingDescriptor = BitmapDescriptorFactory.fromResource(R.drawable.icon_loaction_choose_moving);
+        chooseDescripter = BitmapDescriptorFactory.fromResource(R.drawable.icon_loaction_choose);
+        successDescripter = BitmapDescriptorFactory.fromResource(R.drawable.icon_usecarnow_position_succeed);
+
+        geocodeSearch = new GeocodeSearch(this);
+        geocodeSearch.setOnGeocodeSearchListener(this);
     }
 
     private void setUpLocationStyle() {
@@ -111,15 +134,22 @@ public class MainActivity extends AppCompatActivity implements AMapLocationListe
     }
 
     private void addChooseMarker() {
-        BitmapDescriptor chooseDescriptor = BitmapDescriptorFactory.fromResource(R.drawable.icon_loaction_choose);
-        MarkerOptions centerMarkerOption = new MarkerOptions().position(myLocation).icon(chooseDescriptor);
-        marker = aMap.addMarker(centerMarkerOption);
-        marker.setPositionByPixels(mapView.getWidth()/2, mapView.getHeight()/2);
+        MarkerOptions centerMarkerOption = new MarkerOptions().position(myLocation).icon(chooseDescripter);
+        centerMarker = aMap.addMarker(centerMarkerOption);
+        centerMarker.setPositionByPixels(mapView.getWidth() / 2, mapView.getHeight() / 2);
         handler.postDelayed(new Runnable() {
             @Override
             public void run() {
                 CameraUpdate update = CameraUpdateFactory.zoomTo(17f);
-                aMap.animateCamera(update, 1000, null);
+                aMap.animateCamera(update, 1000, new AMap.CancelableCallback() {
+                    @Override
+                    public void onFinish() {
+                        aMap.setOnCameraChangeListener(MainActivity.this);
+                    }
+                    @Override
+                    public void onCancel() {
+                    }
+                });
             }
         }, 1000);
     }
@@ -160,23 +190,89 @@ public class MainActivity extends AppCompatActivity implements AMapLocationListe
 
     @Override
     public void onCameraChange(CameraPosition cameraPosition) {
-
+        if (centerMarker != null) {
+            setMovingMarker();
+        }
     }
 
     @Override
     public void onCameraChangeFinish(CameraPosition cameraPosition) {
-        Log.d("debug", "onCameraChangeFinish");
-        LatLng latLng = aMap.getCameraPosition().target;
+        LatLonPoint point = new LatLonPoint(cameraPosition.target.latitude, cameraPosition.target.longitude);
+        RegeocodeQuery query = new RegeocodeQuery(point, 50, GeocodeSearch.AMAP);
+        geocodeSearch.getFromLocationAsyn(query);
+        if (centerMarker != null) {
+            animMarker();
+        }
     }
 
     @Override
     public void onClick(View v) {
         switch (v.getId()) {
             case R.id.button:
-                marker.setIcon(BitmapDescriptorFactory.fromResource(R.drawable.icon_loaction_choose_moving));
+                animMarker();
                 break;
             default:
                 break;
         }
+    }
+
+    private void setMovingMarker() {
+        if (isMovingMarker)
+            return;
+
+        isMovingMarker = true;
+        centerMarker.setIcon(movingDescriptor);
+    }
+
+    private void animMarker() {
+        isMovingMarker = false;
+        if (animator != null) {
+            animator.start();
+            return;
+        }
+        animator = ValueAnimator.ofFloat(mapView.getHeight()/2, mapView.getHeight()/2 - 30);
+        animator.setInterpolator(new DecelerateInterpolator());
+        animator.setDuration(150);
+        animator.setRepeatCount(1);
+        animator.setRepeatMode(ValueAnimator.REVERSE);
+        animator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+            @Override
+            public void onAnimationUpdate(ValueAnimator animation) {
+                Float value = (Float) animation.getAnimatedValue();
+                centerMarker.setPositionByPixels(mapView.getWidth() / 2, Math.round(value));
+            }
+        });
+        animator.addListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                centerMarker.setIcon(chooseDescripter);
+            }
+        });
+        animator.start();
+    }
+
+    private void endAnim() {
+        if (animator != null && animator.isRunning())
+            animator.end();
+    }
+
+    @Override
+    public void onRegeocodeSearched(RegeocodeResult regeocodeResult, int i) {
+        if(i == 0){
+            if(regeocodeResult != null&& regeocodeResult.getRegeocodeAddress() != null){
+                String addressName = regeocodeResult.getRegeocodeAddress().getFormatAddress() + "附近";
+                ToastUtil.show(MainActivity.this, addressName);
+                endAnim();
+                centerMarker.setIcon(successDescripter);
+            }else{
+                ToastUtil.show(MainActivity.this, R.string.no_result);
+            }
+        }else{
+            ToastUtil.show(MainActivity.this, R.string.error_network);
+        }
+    }
+
+    @Override
+    public void onGeocodeSearched(GeocodeResult geocodeResult, int rCode) {
     }
 }
