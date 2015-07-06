@@ -2,15 +2,23 @@ package cn.xm.weidongjian.amapdemo;
 
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
+import android.animation.AnimatorSet;
+import android.animation.ObjectAnimator;
 import android.animation.ValueAnimator;
 import android.graphics.Color;
 import android.location.Location;
 import android.os.Bundle;
 import android.os.Handler;
 import android.support.v7.app.AppCompatActivity;
-import android.util.Log;
+import android.support.v7.widget.Toolbar;
+import android.view.Gravity;
 import android.view.View;
+import android.view.ViewGroup;
+import android.view.ViewTreeObserver;
 import android.view.animation.DecelerateInterpolator;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
+import android.widget.TextView;
 
 import com.amap.api.location.AMapLocation;
 import com.amap.api.location.AMapLocationListener;
@@ -32,13 +40,14 @@ import com.amap.api.services.core.LatLonPoint;
 import com.amap.api.services.geocoder.GeocodeResult;
 import com.amap.api.services.geocoder.GeocodeSearch;
 import com.amap.api.services.geocoder.GeocodeSearch.OnGeocodeSearchListener;
+import com.amap.api.services.geocoder.RegeocodeAddress;
 import com.amap.api.services.geocoder.RegeocodeQuery;
 import com.amap.api.services.geocoder.RegeocodeResult;
 
 import cn.xm.weidongjian.amapdemo.utils.ToastUtil;
 
 
-public class MainActivity extends AppCompatActivity implements AMapLocationListener, AMap.OnCameraChangeListener, View.OnClickListener, LocationSource, OnGeocodeSearchListener {
+public class AmapActivity extends AppCompatActivity implements AMapLocationListener, AMap.OnCameraChangeListener, View.OnClickListener, LocationSource, OnGeocodeSearchListener {
     private MapView mapView;
     private AMap aMap;
     private LocationManagerProxy mLocationManagerProxy;
@@ -50,11 +59,15 @@ public class MainActivity extends AppCompatActivity implements AMapLocationListe
     private BitmapDescriptor movingDescriptor, chooseDescripter, successDescripter;
     private ValueAnimator animator = null;
     private GeocodeSearch geocodeSearch;
+    private Toolbar toolbar;
+    private FrameLayout containerLayout;
+    private ImageView ivCircle;
+    private TextView tvCurLocation, tvDestination;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
+        setContentView(R.layout.activity_amap);
         mapView = (MapView) findViewById(R.id.map);
         mapView.onCreate(savedInstanceState);
 
@@ -64,7 +77,15 @@ public class MainActivity extends AppCompatActivity implements AMapLocationListe
     }
 
     private void initUI() {
-        findViewById(R.id.button).setOnClickListener(this);
+        findViewById(R.id.myLocation).setOnClickListener(this);
+        toolbar = (Toolbar) findViewById(R.id.toolbar);
+        toolbar.setTitle("现在用车");
+        toolbar.setTitleTextColor(Color.WHITE);
+        setSupportActionBar(toolbar);
+        containerLayout = (FrameLayout) findViewById(R.id.container);
+        tvCurLocation = (TextView) findViewById(R.id.location);
+        tvDestination = (TextView) findViewById(R.id.destination);
+        introAnimPrepare();
     }
 
     private void initAmap() {
@@ -73,6 +94,7 @@ public class MainActivity extends AppCompatActivity implements AMapLocationListe
         }
         aMap.setLocationSource(this);// 设置定位监听
         aMap.setMyLocationEnabled(true);
+        aMap.getUiSettings().setZoomControlsEnabled(false);
 
         aMap.setMyLocationType(AMap.LOCATION_TYPE_LOCATE);
         CameraUpdate cameraUpdate = CameraUpdateFactory.zoomTo(15);
@@ -117,18 +139,19 @@ public class MainActivity extends AppCompatActivity implements AMapLocationListe
 
     @Override
     protected void onDestroy() {
-        super.onDestroy();
         mapView.onDestroy();
+        containerLayout.removeView(ivCircle);
+        super.onDestroy();
     }
 
     @Override
     public void onLocationChanged(AMapLocation aMapLocation) {
         if (aMapLocation != null && aMapLocation.getAMapException().getErrorCode() == 0) {
-            Log.d("debug", "latitude " + aMapLocation.getAddress());
             if (listener != null) {
                 listener.onLocationChanged(aMapLocation);// 显示系统小蓝点
             }
             myLocation = new LatLng(aMapLocation.getLatitude(), aMapLocation.getLongitude());
+            tvCurLocation.setText(aMapLocation.getRoad() + aMapLocation.getStreet() + aMapLocation.getPoiName());
             addChooseMarker();
         }
     }
@@ -144,7 +167,7 @@ public class MainActivity extends AppCompatActivity implements AMapLocationListe
                 aMap.animateCamera(update, 1000, new AMap.CancelableCallback() {
                     @Override
                     public void onFinish() {
-                        aMap.setOnCameraChangeListener(MainActivity.this);
+                        aMap.setOnCameraChangeListener(AmapActivity.this);
                     }
                     @Override
                     public void onCancel() {
@@ -203,13 +226,15 @@ public class MainActivity extends AppCompatActivity implements AMapLocationListe
         if (centerMarker != null) {
             animMarker();
         }
+        showLocationView();
     }
 
     @Override
     public void onClick(View v) {
         switch (v.getId()) {
-            case R.id.button:
-                animMarker();
+            case R.id.myLocation:
+                CameraUpdate update = CameraUpdateFactory.changeLatLng(myLocation);
+                aMap.animateCamera(update);
                 break;
             default:
                 break;
@@ -222,6 +247,7 @@ public class MainActivity extends AppCompatActivity implements AMapLocationListe
 
         isMovingMarker = true;
         centerMarker.setIcon(movingDescriptor);
+        hideLocationView();
     }
 
     private void animMarker() {
@@ -260,19 +286,94 @@ public class MainActivity extends AppCompatActivity implements AMapLocationListe
     public void onRegeocodeSearched(RegeocodeResult regeocodeResult, int i) {
         if(i == 0){
             if(regeocodeResult != null&& regeocodeResult.getRegeocodeAddress() != null){
-                String addressName = regeocodeResult.getRegeocodeAddress().getFormatAddress() + "附近";
-                ToastUtil.show(MainActivity.this, addressName);
                 endAnim();
                 centerMarker.setIcon(successDescripter);
+                RegeocodeAddress regeocodeAddress = regeocodeResult.getRegeocodeAddress();
+                String formatAddress = regeocodeResult.getRegeocodeAddress().getFormatAddress();
+                String shortAdd = formatAddress.replace(regeocodeAddress.getProvince(), "").replace(regeocodeAddress.getCity(), "").replace(regeocodeAddress.getDistrict(), "");
+                tvCurLocation.setText(shortAdd);
             }else{
-                ToastUtil.show(MainActivity.this, R.string.no_result);
+                ToastUtil.show(AmapActivity.this, R.string.no_result);
             }
         }else{
-            ToastUtil.show(MainActivity.this, R.string.error_network);
+            ToastUtil.show(AmapActivity.this, R.string.error_network);
         }
     }
 
     @Override
     public void onGeocodeSearched(GeocodeResult geocodeResult, int rCode) {
+    }
+
+    private void introAnimPrepare() {
+        toolbar.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
+            @Override
+            public boolean onPreDraw() {
+                toolbar.getViewTreeObserver().removeOnPreDrawListener(this);
+                toolbar.setTranslationY(-toolbar.getHeight());
+                return false;
+            }
+        });
+        ivCircle = new ImageView(this);
+        ivCircle.setImageResource(R.drawable.tunahome_imageview_bottom);
+        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        params.gravity = Gravity.CENTER;
+        containerLayout.addView(ivCircle, params);
+        ivCircle.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
+            @Override
+            public boolean onPreDraw() {
+                ivCircle.getViewTreeObserver().removeOnPreDrawListener(this);
+                ivCircle.setTranslationY(containerLayout.getHeight() / 2 - ivCircle.getHeight());
+                ivCircle.setScaleX(2f);
+                ivCircle.setScaleY(2f);
+                return false;
+            }
+        });
+        containerLayout.post(new Runnable() {
+            @Override
+            public void run() {
+                animIntroduce();
+            }
+        });
+    }
+
+    private void animIntroduce() {
+        ObjectAnimator animToolbar = ObjectAnimator.ofFloat(toolbar, "TranslationY", 0f);
+        animToolbar.setDuration(300);
+        ObjectAnimator animCircle = ObjectAnimator.ofFloat(ivCircle, "TranslationY", 0);
+        animCircle.setDuration(400);
+        ObjectAnimator scaleX = ObjectAnimator.ofFloat(ivCircle, "ScaleX", 1f);
+        scaleX.setDuration(400);
+        ObjectAnimator scaleY = ObjectAnimator.ofFloat(ivCircle, "ScaleY", 1f);
+        scaleY.setDuration(400);
+        AnimatorSet animatorSet = new AnimatorSet();
+        animatorSet.playTogether(animToolbar, animCircle, scaleX, scaleY);
+        animatorSet.addListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                containerLayout.removeView(ivCircle);
+                mapView.setVisibility(View.VISIBLE);
+                tvCurLocation.setVisibility(View.VISIBLE);
+                tvDestination.setVisibility(View.VISIBLE);
+            }
+        });
+        animatorSet.start();
+    }
+
+    private void hideLocationView() {
+        ObjectAnimator animLocation = ObjectAnimator.ofFloat(tvCurLocation, "TranslationY", -tvCurLocation.getHeight()*2);
+        ObjectAnimator animDestinatiion = ObjectAnimator.ofFloat(tvDestination, "TranslationY", tvDestination.getHeight()*2);
+        AnimatorSet set = new AnimatorSet();
+        set.playTogether(animDestinatiion, animLocation);
+        set.setDuration(200);
+        set.start();
+    }
+
+    private void showLocationView() {
+        ObjectAnimator animLocation = ObjectAnimator.ofFloat(tvCurLocation, "TranslationY", 0);
+        ObjectAnimator animDestinatiion = ObjectAnimator.ofFloat(tvDestination, "TranslationY", 0);
+        AnimatorSet set = new AnimatorSet();
+        set.playTogether(animDestinatiion, animLocation);
+        set.setDuration(200);
+        set.start();
     }
 }

@@ -1,0 +1,69 @@
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+                xmlns:tools="http://schemas.android.com/tools"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                tools:context=".MainActivity">
+
+    <android.support.v7.widget.Toolbar
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="#140909"
+        android:layout_alignParentTop="true"/>
+
+    <FrameLayout
+        android:id="@+id/container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_below="@+id/toolbar"
+        >
+
+        <com.amap.api.maps.MapView
+            android:id="@+id/map"
+            android:visibility="invisible"
+            android:layout_width="fill_parent"
+            android:layout_height="fill_parent"/>
+
+        <TextView
+            android:id="@+id/location"
+            android:visibility="invisible"
+            android:text="获取中……"
+            android:drawableLeft="@drawable/schedule_end_icon"
+            android:singleLine="true"
+            android:ellipsize="end"
+            android:padding="10dp"
+            android:background="@drawable/bg_white"
+            android:textColor="@android:color/secondary_text_light"
+            android:textSize="15sp"
+            android:drawablePadding="8dp"
+            android:layout_margin="20dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"/>
+
+        <TextView
+            android:id="@+id/destination"
+            android:visibility="invisible"
+            android:background="@drawable/bg_black"
+            android:textColor="@android:color/white"
+            android:text="输入目的地"
+            android:textSize="16sp"
+            android:layout_margin="20dp"
+            android:padding="15dp"
+            android:layout_gravity="bottom"
+            android:gravity="center"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"/>
+
+        <ImageView
+            android:id="@+id/myLocation"
+            android:src="@drawable/btn_location"
+            android:layout_gravity="right|bottom"
+            android:layout_marginBottom="70dp"
+            android:layout_marginRight="5dp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"/>
+
+    </FrameLayout>
+
+</RelativeLayout>
